@@ -1,0 +1,4 @@
+.dashboard-chart{ height:260px; }
+
+/* allow the chart canvas to fill the container */
+.dashboard-chart canvas{ width:100% !important; height:100% !important; }
