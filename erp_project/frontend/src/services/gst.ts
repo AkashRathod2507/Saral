@@ -34,6 +34,51 @@ export interface GstListResponse {
   limit: number;
 }
 
+export interface GstDraftSection {
+  label: string;
+  count: number;
+  taxableValue: number;
+  tax: number;
+  invoiceNumbers: string[];
+}
+
+export interface GstDraftInvoicePreview {
+  invoiceNumber: string;
+  invoiceDate: string;
+  customerName?: string;
+  customerGSTIN?: string;
+  gstTreatment?: string;
+  status?: string;
+  subTotal: number;
+  taxAmount: number;
+  grandTotal?: number;
+  cgstTotal: number;
+  sgstTotal: number;
+  igstTotal: number;
+  placeOfSupply?: string;
+}
+
+export interface GstDraftPreview {
+  period: string;
+  range: {
+    start: string;
+    end: string;
+  };
+  totals: {
+    taxableValue: number;
+    tax: number;
+    invoices: number;
+  };
+  sections: Record<string, GstDraftSection>;
+  invoices: GstDraftInvoicePreview[];
+}
+
+export interface GstTransactionSearchResponse {
+  period: string;
+  total: number;
+  results: GstDraftInvoicePreview[];
+}
+
 export const fetchGstReturns = async (params?: { page?: number; limit?: number }) => {
   const res = await axiosInstance.get('/api/v1/gst', { params });
   return res.data?.data as GstListResponse;
@@ -50,4 +95,14 @@ export const updateGstReturnStatus = async (
 ) => {
   const res = await axiosInstance.patch(`/api/v1/gst/${id}`, payload);
   return res.data?.data as GstReturnSummary;
+};
+
+export const fetchGstDraftPreview = async (params: { period: string }) => {
+  const res = await axiosInstance.get('/api/v1/gst/draft/preview', { params });
+  return res.data?.data as GstDraftPreview;
+};
+
+export const searchGstTransactions = async (params: { period: string; q?: string; treatment?: string; status?: string; limit?: number }) => {
+  const res = await axiosInstance.get('/api/v1/gst/transactions', { params });
+  return res.data?.data as GstTransactionSearchResponse;
 };

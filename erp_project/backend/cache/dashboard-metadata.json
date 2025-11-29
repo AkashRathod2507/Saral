@@ -1,6 +1,19 @@
 {
-  "generatedAt": "2025-11-22T05:25:00.109Z",
+  "generatedAt": "2025-11-27T09:17:25.848Z",
   "metadata": {
+    "Attendance": {
+      "numeric": [
+        "__v"
+      ],
+      "dates": [
+        "date",
+        "checkIn",
+        "checkOut",
+        "createdAt",
+        "updatedAt"
+      ],
+      "hasTimestamps": true
+    },
     "Counter": {
       "numeric": [
         "seq",
@@ -17,6 +30,18 @@
         "__v"
       ],
       "dates": [
+        "createdAt",
+        "updatedAt"
+      ],
+      "hasTimestamps": true
+    },
+    "Employee": {
+      "numeric": [
+        "salary",
+        "__v"
+      ],
+      "dates": [
+        "joiningDate",
         "createdAt",
         "updatedAt"
       ],

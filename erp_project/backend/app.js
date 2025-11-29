@@ -11,23 +11,26 @@ const limiter = rateLimit({
     max: 100 // limit each IP to 100 requests per windowMs
 });
 
-app.use(limiter);
-// Configure CORS: allow credentials and reflect the request origin in dev.
-app.use(cors({
-    origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl)
+const corsOrigins = (CORS_ORIGIN || '').split(',').map((entry) => entry.trim()).filter(Boolean);
+const corsOptions = {
+    origin(origin, callback) {
         if (!origin) return callback(null, true);
-        // If CORS_ORIGIN is a comma-separated list, honor it
-        if (CORS_ORIGIN && CORS_ORIGIN !== '*' ) {
-            const allowed = CORS_ORIGIN.split(',').map(s => s.trim());
-            if (allowed.indexOf(origin) !== -1) return callback(null, true);
-            return callback(new Error('CORS policy: This origin is not allowed'), false);
+        if (corsOrigins.length && corsOrigins[0] !== '*') {
+            if (corsOrigins.includes(origin)) return callback(null, true);
+            return callback(new Error('CORS policy: This origin is not allowed'));
         }
-        // Fallback: allow any origin (dev mode)
         return callback(null, true);
     },
-    credentials: true
-}));
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    exposedHeaders: ['Content-Disposition'],
+    optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+app.use(limiter);
 app.use(express.json({ limit: '16kb' }));
 app.use(express.urlencoded({ extended: true, limit: '16kb' }));
 app.use(express.static('public'));
@@ -75,6 +78,8 @@ import transactionRouter from './routes/transaction.routes.js';
 import dashboardRouter from './routes/dashboard.route.js';
 import financeRouter from './routes/finance.routes.js';
 import gstRouter from './routes/gst.routes.js';
+import employeeRouter from './routes/employee.routes.js';
+import attendanceRouter from './routes/attendance.routes.js';
 
 // --- Declare Routes ---
 app.use("/api/v1/users", userRouter);
@@ -89,4 +94,6 @@ app.use("/api/v1/transactions", transactionRouter);
 app.use("/api/v1/dashboard", dashboardRouter);
 app.use("/api/v1/finance", financeRouter);
 app.use("/api/v1/gst", gstRouter);
+app.use("/api/v1/employees", employeeRouter);
+app.use("/api/v1/attendance", attendanceRouter);
 export default app;

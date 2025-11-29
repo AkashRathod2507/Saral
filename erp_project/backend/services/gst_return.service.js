@@ -111,6 +111,24 @@ const aggregateInvoiceSummary = async ({ organizationId, start, end }) => {
   };
 };
 
+const projectInvoicePreview = {
+  invoiceNumber: 1,
+  invoiceDate: 1,
+  customerName: 1,
+  customerGSTIN: 1,
+  gstTreatment: 1,
+  status: 1,
+  supplyType: 1,
+  grandTotal: 1,
+  taxAmount: 1,
+  subTotal: 1,
+  discountTotal: 1,
+  placeOfSupply: 1,
+  cgstTotal: 1,
+  sgstTotal: 1,
+  igstTotal: 1
+};
+
 const aggregateTransactionsSplit = async ({ organizationId, start, end }) => {
   const match = {
     organization_id: toObjectId(organizationId),
@@ -259,4 +277,141 @@ export const updateGstReturnStatus = async ({ id, organizationId, status, notes,
   }
 
   return doc;
+};
+
+const foldSectionTotals = (acc, invoice) => {
+  const taxable = coerceNumber(invoice.subTotal) - coerceNumber(invoice.discountTotal || 0);
+  const tax = coerceNumber(invoice.taxAmount);
+  acc.count += 1;
+  acc.taxableValue += taxable;
+  acc.tax += tax;
+  acc.invoiceNumbers.push(invoice.invoiceNumber);
+  return acc;
+};
+
+const buildDraftSections = (invoices = []) => {
+  const sections = {
+    b2b: { label: 'B2B Supplies', count: 0, taxableValue: 0, tax: 0, invoiceNumbers: [] },
+    b2c: { label: 'B2C Supplies', count: 0, taxableValue: 0, tax: 0, invoiceNumbers: [] },
+    export: { label: 'Export / SEZ', count: 0, taxableValue: 0, tax: 0, invoiceNumbers: [] },
+    nil: { label: 'Nil / Exempt', count: 0, taxableValue: 0, tax: 0, invoiceNumbers: [] }
+  };
+
+  invoices.forEach((invoice) => {
+    if (invoice.gstTreatment === 'b2c') {
+      foldSectionTotals(sections.b2c, invoice);
+    } else if (invoice.gstTreatment === 'export' || invoice.gstTreatment === 'sez') {
+      foldSectionTotals(sections.export, invoice);
+    } else if (coerceNumber(invoice.subTotal) === 0) {
+      foldSectionTotals(sections.nil, invoice);
+    } else {
+      foldSectionTotals(sections.b2b, invoice);
+    }
+  });
+
+  return sections;
+};
+
+export const buildGstDraft = async ({ organizationId, period }) => {
+  const { periodLabel, start, end } = resolvePeriodWindow(period);
+  const match = {
+    organizationId: toObjectId(organizationId),
+    isDeleted: { $ne: true },
+    invoiceDate: { $gte: start, $lte: end }
+  };
+
+  const invoices = await Invoice.find(match, projectInvoicePreview)
+    .sort({ invoiceDate: 1 })
+    .lean();
+
+  const sections = buildDraftSections(invoices);
+
+  const totals = invoices.reduce(
+    (acc, invoice) => ({
+      taxableValue: acc.taxableValue + coerceNumber(invoice.subTotal),
+      tax: acc.tax + coerceNumber(invoice.taxAmount),
+      invoices: acc.invoices + 1
+    }),
+    { taxableValue: 0, tax: 0, invoices: 0 }
+  );
+
+  return {
+    period: periodLabel,
+    range: {
+      start,
+      end
+    },
+    totals,
+    sections,
+    invoices: invoices.map((invoice) => ({
+      invoiceNumber: invoice.invoiceNumber,
+      invoiceDate: invoice.invoiceDate,
+      customerName: invoice.customerName,
+      customerGSTIN: invoice.customerGSTIN,
+      gstTreatment: invoice.gstTreatment,
+      status: invoice.status,
+      subTotal: coerceNumber(invoice.subTotal),
+      taxAmount: coerceNumber(invoice.taxAmount),
+      cgstTotal: coerceNumber(invoice.cgstTotal),
+      sgstTotal: coerceNumber(invoice.sgstTotal),
+      igstTotal: coerceNumber(invoice.igstTotal),
+      placeOfSupply: invoice.placeOfSupply
+    }))
+  };
+};
+
+export const searchGstTransactions = async ({
+  organizationId,
+  period,
+  query,
+  gstTreatment,
+  status,
+  limit = 50
+}) => {
+  const { start, end } = resolvePeriodWindow(period);
+  const match = {
+    organizationId: toObjectId(organizationId),
+    isDeleted: { $ne: true },
+    invoiceDate: { $gte: start, $lte: end }
+  };
+
+  if (gstTreatment && gstTreatment !== 'all') {
+    match.gstTreatment = gstTreatment;
+  }
+  if (status && status !== 'all') {
+    match.status = status;
+  }
+
+  if (query) {
+    const regex = new RegExp(query.trim(), 'i');
+    match.$or = [
+      { invoiceNumber: regex },
+      { customerName: regex },
+      { customerGSTIN: regex }
+    ];
+  }
+
+  const results = await Invoice.find(match, projectInvoicePreview)
+    .sort({ invoiceDate: -1 })
+    .limit(Number(limit) || 50)
+    .lean();
+
+  return {
+    period: formatPeriod(start),
+    total: results.length,
+    results: results.map((invoice) => ({
+      invoiceNumber: invoice.invoiceNumber,
+      invoiceDate: invoice.invoiceDate,
+      customerName: invoice.customerName,
+      customerGSTIN: invoice.customerGSTIN,
+      gstTreatment: invoice.gstTreatment,
+      status: invoice.status,
+      subTotal: coerceNumber(invoice.subTotal),
+      taxAmount: coerceNumber(invoice.taxAmount),
+      grandTotal: coerceNumber(invoice.grandTotal),
+      igstTotal: coerceNumber(invoice.igstTotal),
+      cgstTotal: coerceNumber(invoice.cgstTotal),
+      sgstTotal: coerceNumber(invoice.sgstTotal)
+    }))
+  };
 };

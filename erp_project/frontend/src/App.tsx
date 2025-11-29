@@ -12,6 +12,8 @@ import BillingPage from './pages/BillingPage';
 import TransactionsPage from './pages/TransactionsPage';
 import FinanceHelpPage from './pages/FinanceHelpPage';
 import GstPage from './pages/GstPage';
+import EmployeesPage from './pages/EmployeesPage';
+import AttendancePage from './pages/AttendancePage';
 
 const App: React.FC = () => {
   return (
@@ -29,6 +31,8 @@ const App: React.FC = () => {
         <Route path="transactions" element={<TransactionsPage />} />
         <Route path="finance" element={<FinanceHelpPage />} />
         <Route path="gst" element={<GstPage />} />
+        <Route path="employees" element={<EmployeesPage />} />
+        <Route path="attendance" element={<AttendancePage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />

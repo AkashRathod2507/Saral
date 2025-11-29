@@ -4,7 +4,9 @@ import {
   listReturns,
   generateReturn,
   fetchReturn,
-  modifyReturnStatus
+  modifyReturnStatus,
+  gstDraftPreviewHandler,
+  gstTransactionSearchHandler
 } from '../controllers/gst_return.controller.js';
 
 const router = Router();
@@ -16,6 +18,9 @@ router.route('/')
 
 router.route('/generate')
   .post(generateReturn);
+
+router.get('/draft/preview', gstDraftPreviewHandler);
+router.get('/transactions', gstTransactionSearchHandler);
 
 router.route('/:id')
   .get(fetchReturn)

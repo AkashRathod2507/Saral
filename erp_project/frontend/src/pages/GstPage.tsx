@@ -1,7 +1,19 @@
 import React from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
-import { fetchGstReturns, generateGstReturn, updateGstReturnStatus } from '../services/gst';
-import type { GstReturnSummary, GstReturnStatus, GstReturnType } from '../services/gst';
+import {
+  fetchGstReturns,
+  generateGstReturn,
+  updateGstReturnStatus,
+  fetchGstDraftPreview,
+  searchGstTransactions
+} from '../services/gst';
+import type {
+  GstReturnSummary,
+  GstReturnStatus,
+  GstReturnType,
+  GstDraftPreview,
+  GstDraftInvoicePreview
+} from '../services/gst';
 
 const formatCurrency = (value?: number) =>
   new Intl.NumberFormat('en-IN', {
@@ -37,6 +49,13 @@ const GstPage: React.FC = () => {
   const [formState, setFormState] = React.useState({ period: monthInputDefault(), returnType: 'GSTR1' as GstReturnType });
   const [generating, setGenerating] = React.useState(false);
   const [statusUpdatingId, setStatusUpdatingId] = React.useState<string | null>(null);
+  const [draftPeriod, setDraftPeriod] = React.useState(monthInputDefault());
+  const [draft, setDraft] = React.useState<GstDraftPreview | null>(null);
+  const [draftLoading, setDraftLoading] = React.useState(false);
+  const [transactions, setTransactions] = React.useState<GstDraftInvoicePreview[]>([]);
+  const [transactionFilters, setTransactionFilters] = React.useState({ q: '', treatment: 'all', status: 'all' });
+  const [appliedFilters, setAppliedFilters] = React.useState({ q: '', treatment: 'all', status: 'all' });
+  const [transactionsLoading, setTransactionsLoading] = React.useState(false);
 
   const loadReturns = React.useCallback(async (pageOverride?: number) => {
     setLoading(true);
@@ -59,6 +78,46 @@ const GstPage: React.FC = () => {
   React.useEffect(() => {
     loadReturns();
   }, [loadReturns]);
+
+  const loadDraft = React.useCallback(async () => {
+    setDraftLoading(true);
+    setError(null);
+    try {
+      const data = await fetchGstDraftPreview({ period: draftPeriod });
+      setDraft(data);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Unable to prepare GST draft');
+    } finally {
+      setDraftLoading(false);
+    }
+  }, [draftPeriod]);
+
+  const loadTransactions = React.useCallback(async () => {
+    setTransactionsLoading(true);
+    setError(null);
+    try {
+      const data = await searchGstTransactions({
+        period: draftPeriod,
+        q: appliedFilters.q || undefined,
+        treatment: appliedFilters.treatment,
+        status: appliedFilters.status,
+        limit: 100
+      });
+      setTransactions(data.results || []);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Unable to fetch GST transactions');
+    } finally {
+      setTransactionsLoading(false);
+    }
+  }, [draftPeriod, appliedFilters]);
+
+  React.useEffect(() => {
+    loadDraft();
+  }, [loadDraft]);
+
+  React.useEffect(() => {
+    loadTransactions();
+  }, [loadTransactions]);
 
   const latestReturn = React.useMemo(() => entries.at(0), [entries]);
 
@@ -180,6 +239,146 @@ const GstPage: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      <Card className="shadow-sm border-0 mb-4">
+        <Card.Body>
+          <div className="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-3">
+            <div>
+              <div className="text-uppercase text-muted small">Draft Builder</div>
+              <h5 className="mb-0">Period {draft?.period ?? draftPeriod}</h5>
+            </div>
+            <div className="d-flex gap-2">
+              <Form.Control type="month" value={draftPeriod} onChange={(event) => setDraftPeriod(event.target.value)} />
+              <Button variant="outline-secondary" onClick={loadDraft} disabled={draftLoading}>
+                {draftLoading ? <Spinner animation="border" size="sm" /> : 'Refresh Draft'}
+              </Button>
+            </div>
+          </div>
+          {draft ? (
+            <Row className="g-3">
+              <Col md={4}>
+                <Card className="border-0 bg-light h-100">
+                  <Card.Body>
+                    <div className="text-uppercase text-muted small">Taxable Value</div>
+                    <div className="fs-3 fw-semibold">{formatCurrency(draft.totals.taxableValue)}</div>
+                  </Card.Body>
+                </Card>
+              </Col>
+              <Col md={4}>
+                <Card className="border-0 bg-light h-100">
+                  <Card.Body>
+                    <div className="text-uppercase text-muted small">Tax Liability</div>
+                    <div className="fs-3 fw-semibold">{formatCurrency(draft.totals.tax)}</div>
+                  </Card.Body>
+                </Card>
+              </Col>
+              <Col md={4}>
+                <Card className="border-0 bg-light h-100">
+                  <Card.Body>
+                    <div className="text-uppercase text-muted small">Documents</div>
+                    <div className="fs-3 fw-semibold">{draft.totals.invoices}</div>
+                  </Card.Body>
+                </Card>
+              </Col>
+            </Row>
+          ) : (
+            <div className="text-muted">No draft data yet. Generate a summary first.</div>
+          )}
+        </Card.Body>
+      </Card>
+
+      {draft && (
+        <Row className="g-4 mb-4">
+          {Object.entries(draft.sections).map(([key, section]) => (
+            <Col md={6} lg={3} key={key}>
+              <Card className="shadow-sm border-0 h-100">
+                <Card.Body>
+                  <div className="text-uppercase text-muted small">{section.label}</div>
+                  <div className="display-6 fw-semibold mb-2">{section.count}</div>
+                  <div className="text-muted small">Taxable {formatCurrency(section.taxableValue)}</div>
+                  <div className="text-muted small">Tax {formatCurrency(section.tax)}</div>
+                </Card.Body>
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      )}
+
+      <Card className="shadow-sm border-0 mb-4">
+        <Card.Body>
+          <div className="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-3">
+            <div>
+              <div className="text-uppercase text-muted small">Transaction Review</div>
+              <h5 className="mb-0">Invoice register for {draft?.period ?? draftPeriod}</h5>
+            </div>
+            <div className="d-flex flex-column flex-md-row gap-2">
+              <Form.Control
+                placeholder="Search invoice or GSTIN"
+                value={transactionFilters.q}
+                onChange={(event) => setTransactionFilters((prev) => ({ ...prev, q: event.target.value }))}
+              />
+              <Form.Select
+                value={transactionFilters.treatment}
+                onChange={(event) => setTransactionFilters((prev) => ({ ...prev, treatment: event.target.value }))}
+              >
+                <option value="all">All Types</option>
+                <option value="b2b">B2B</option>
+                <option value="b2c">B2C</option>
+                <option value="export">Export</option>
+                <option value="sez">SEZ</option>
+              </Form.Select>
+              <Form.Select
+                value={transactionFilters.status}
+                onChange={(event) => setTransactionFilters((prev) => ({ ...prev, status: event.target.value }))}
+              >
+                <option value="all">Any Status</option>
+                <option value="Draft">Draft</option>
+                <option value="Sent">Sent</option>
+                <option value="Paid">Paid</option>
+                <option value="Overdue">Overdue</option>
+              </Form.Select>
+              <Button
+                variant="outline-secondary"
+                onClick={() => setAppliedFilters(transactionFilters)}
+                disabled={transactionsLoading}
+              >
+                {transactionsLoading ? <Spinner animation="border" size="sm" /> : 'Apply'}
+              </Button>
+            </div>
+          </div>
+          <Table responsive hover size="sm" className="align-middle">
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Date</th>
+                <th>Customer</th>
+                <th>GSTIN</th>
+                <th>Type</th>
+                <th className="text-end">Taxable</th>
+                <th className="text-end">Tax</th>
+                <th className="text-end">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((txn) => (
+                <tr key={txn.invoiceNumber}>
+                  <td className="fw-semibold">{txn.invoiceNumber}</td>
+                  <td>{txn.invoiceDate ? new Date(txn.invoiceDate).toLocaleDateString() : '-'}</td>
+                  <td>{txn.customerName}</td>
+                  <td>{txn.customerGSTIN || 'N/A'}</td>
+                  <td>{txn.gstTreatment}</td>
+                  <td className="text-end">{formatCurrency(txn.subTotal)}</td>
+                  <td className="text-end">{formatCurrency(txn.taxAmount)}</td>
+                  <td className="text-end">{formatCurrency((txn.grandTotal ?? (txn.subTotal + txn.taxAmount)))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+          {!transactionsLoading && transactions.length === 0 && (
+            <div className="text-center text-muted small">No transactions match the filters.</div>
+          )}
+        </Card.Body>
+      </Card>
 
       <Card className="shadow-sm border-0">
         <Card.Body>

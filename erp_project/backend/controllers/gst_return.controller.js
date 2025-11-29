@@ -4,7 +4,9 @@ import {
   listGstReturns,
   upsertGstReturn,
   getGstReturnById,
-  updateGstReturnStatus
+  updateGstReturnStatus,
+  buildGstDraft,
+  searchGstTransactions
 } from '../services/gst_return.service.js';
 
 export const listReturns = asyncHandler(async (req, res) => {
@@ -47,4 +49,26 @@ export const modifyReturnStatus = asyncHandler(async (req, res) => {
     userId: req.user?._id
   });
   return res.status(200).json(new ApiResponse(200, doc, 'GST return updated'));
+});
+
+export const gstDraftPreviewHandler = asyncHandler(async (req, res) => {
+  const { period } = req.query;
+  const data = await buildGstDraft({
+    organizationId: req.organization_id,
+    period
+  });
+  return res.status(200).json(new ApiResponse(200, data, 'GST draft prepared'));
+});
+
+export const gstTransactionSearchHandler = asyncHandler(async (req, res) => {
+  const { period, q, treatment, status, limit } = req.query;
+  const data = await searchGstTransactions({
+    organizationId: req.organization_id,
+    period,
+    query: q,
+    gstTreatment: treatment,
+    status,
+    limit: limit ? Number(limit) : undefined
+  });
+  return res.status(200).json(new ApiResponse(200, data, 'GST transactions fetched'));
 });

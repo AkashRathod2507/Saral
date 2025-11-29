@@ -21,7 +21,9 @@ const sections = [
       { path: '/app/billing', label: 'Billing' },
       { path: '/app/transactions', label: 'Transactions' },
       { path: '/app/finance', label: 'Finance Helper' },
-      { path: '/app/gst', label: 'GST Filing' }
+      { path: '/app/gst', label: 'GST Filing' },
+      { path: '/app/employees', label: 'Employees' },
+      { path: '/app/attendance', label: 'Attendance' }
     ],
   },
 ];
